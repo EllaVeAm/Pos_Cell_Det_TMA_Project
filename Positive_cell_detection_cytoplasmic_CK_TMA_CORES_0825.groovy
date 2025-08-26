@@ -1,25 +1,24 @@
-// QuPath >= 0.4.x — run directly on TMA cores (no annotations)
+// QuPath >= 0.4.x to run on TMA cores
 import qupath.lib.objects.classes.PathClass
 import static qupath.lib.gui.scripting.QPEx.*
 
-// ---------------- SETTINGS ----------------
+// Defiition General Settings (see below)
 double REQ_PX       = 0.19
-String POS_FEATURE   = 'Cytoplasm: DAB OD mean'   // or 'Cell: DAB OD mean' / 'Nucleus: DAB OD mean'
+String POS_FEATURE   = 'Cytoplasm: DAB OD mean'   
 double POS_THRESHOLD = 1.0
 double BKG_DAB   = 10.0
 double SIGMA_DAB = 0.8
 double THRESH_DAB= 0.01
 double EXPAND_DAB= 2.5
-// ------------------------------------------
 
 if (getCurrentImageData() == null) { print 'No image open.'; return }
 
 setImageType('BRIGHTFIELD_H_DAB')
 
-// Resolve channel names actually present
+// Channel names based on color deconvolution
 def ch = getCurrentImageData().getServer().getMetadata().getChannels()*.getName()
-def H_IMG  = ['Hematoxylin OD','Hematoxylin'].find { ch.contains(it) }     // null if none
-def DAB_IMG= ['DAB OD','DAB'].find { ch.contains(it) }                     // null if none
+def H_IMG  = ['Hematoxylin OD','Hematoxylin'].find { ch.contains(it) }     
+def DAB_IMG= ['DAB OD','DAB'].find { ch.contains(it) }                     
 println "Using channels -> H: '${H_IMG ?: "(plugin default)"}', DAB: '${DAB_IMG ?: "(plugin default)"}'"
 
 // Gather TMA cores
@@ -29,7 +28,7 @@ if (cores.isEmpty()) { print 'No usable TMA cores (all missing?).'; return }
 cores.each { core ->
     selectObjects([core])
 
-    // --- Clear ONLY detections inside this core (do not wipe other cores)
+    // Clear onöy detections inside this core (do not wipe other cores)
     def coreGeom = core.getROI()?.getGeometry()
     def detsInCore = new ArrayList(getDetectionObjects()).findAll { d ->
         def g = d.getROI()?.getGeometry()
@@ -38,7 +37,7 @@ cores.each { core ->
     if (!detsInCore.isEmpty())
         removeObjects(detsInCore, true)
 
-    // ----- PASS A: Hematoxylin (broad recall) -----
+    // PASS A: Hematoxylin (broad recall) 
     def pA = [
       'requestedPixelSizeMicrons': REQ_PX,
       'backgroundRadiusMicrons'  : 50.0,
@@ -46,7 +45,7 @@ cores.each { core ->
       'sigmaMicrons'             : 1.5,
       'minAreaMicrons'           : 15.0,
       'maxAreaMicrons'           : 1200.0,
-      'threshold'                : 0.03,   // try 1.5 if over-segmentation
+      'threshold'                : 0.03,   
       'maxBackground'            : 1.0,
       'watershedPostProcess'     : true,
       'cellExpansionMicrons'     : 5.0,
@@ -59,7 +58,7 @@ cores.each { core ->
     def TMP_OD = PathClass.fromString('TMP_OD')
     def passA  = new ArrayList(getCellObjects()); passA.each { it.setPathClass(TMP_OD) }
 
-    // ----- PASS B: DAB-only (aggressive split) -----
+    // PASS B: DAB-only (aggressive split)
     def pB = [
       'requestedPixelSizeMicrons': Math.min(REQ_PX, 0.19),
       'backgroundRadiusMicrons'  : BKG_DAB,
@@ -81,7 +80,7 @@ cores.each { core ->
     def passB   = new ArrayList(getCellObjects().findAll { it.getPathClass() == null })
     passB.each { it.setPathClass(TMP_DAB) }
 
-    // ----- MERGE by overlap: replace OD blobs with DAB-split cells -----
+    // Merge by overlap: replace OD with DAB-split cells
     def toRemoveA = []
     passA.each { a ->
       def ag = a.getROI()?.getGeometry(); if (ag == null) return
@@ -90,7 +89,7 @@ cores.each { core ->
     }
     getCurrentHierarchy().removeObjects(toRemoveA, true)
 
-    // ----- POSITIVE / NEGATIVE -----
+    // Classification: positive/negative
     def CLS_POS = PathClass.fromString('Positive')
     def CLS_NEG = PathClass.fromString('Negative')
     new ArrayList(getCellObjects()).each { c ->
@@ -100,7 +99,7 @@ cores.each { core ->
     }
     fireHierarchyUpdate()
 
-    // ----- Per-core log (name only; no getRow()/getColumn())
+    // Per-core log 
     def cells = new ArrayList(getCellObjects()).findAll { obj ->
         def g = obj.getROI()?.getGeometry()
         g != null && coreGeom != null && g.intersects(coreGeom)
