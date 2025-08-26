@@ -1,15 +1,15 @@
-// QuPath >= 0.4.x — run PositiveCellDetection on ALL TMA CORES
+// QuPath >= 0.4.x to run on TMA cores
 import qupath.lib.objects.classes.PathClass
 import static qupath.lib.gui.scripting.QPEx.*
 
-// ---- sanity check ----
+// sanity check
 if (getCurrentImageData() == null) { print 'No image open.'; return }
 
-// ---- global setup (once) ----
+// global setup
 setImageType('BRIGHTFIELD_H_DAB')
 setColorDeconvolutionStains('{"Name" : "Ki67", "Stain 1" : "Hematoxylin", "Values 1" : "0.8256099748801383 0.5279769334125614 0.1990189115704461", "Stain 2" : "DAB", "Values 2" : "0.21033287066573078 0.4582826870238786 0.8635606882505055", "Background" : " 252 251 249"}')
 
-// Resolve a detection image name that exists for this slide; fall back to O.D. sum
+// DetectionImage Settings
 def ch = getCurrentImageData().getServer().getMetadata().getChannels()*.getName()
 def DET_IMG = ['Optical density sum','Hematoxylin OD','Hematoxylin','DAB OD','DAB'].find { ch.contains(it) } ?: 'Optical density sum'
 println "PositiveCellDetection will use detectionImageBrightfield = '${DET_IMG}'"
@@ -40,12 +40,12 @@ def params = [
   'singleThreshold'          : true
 ]
 
-// ---- get TMA cores ----
+// get TMA cores
 def cores = getTMACoreList().findAll { it != null && !it.isMissing() }
 if (cores.isEmpty()) { print 'No usable TMA cores (all missing?).'; return }
 println "Processing ${cores.size()} TMA core(s)..."
 
-// ---- loop cores ----
+// loop cores 
 cores.each { core ->
   // limit work to this core
   selectObjects([core])
@@ -62,7 +62,7 @@ cores.each { core ->
   // run your PositiveCellDetection
   runPlugin('qupath.imagej.detect.cells.PositiveCellDetection', params)
 
-  // --- Explicit classification to ensure each cell has a PathClass ---
+  // Explicit classification to ensure each cell has a PathClass
   def CLS_POS = PathClass.fromString('Positive')
   def CLS_NEG = PathClass.fromString('Negative')
   double CUTOFF = 0.15   // keep in sync with thresholdPositive1
@@ -86,4 +86,4 @@ cores.each { core ->
   println "${core.getName()}  Cells: ${cellsHere.size()}  Positive: ${posCount}  Negative: ${negCount}"
 }
 
-// (optional) want a TSV export per core? say the word and I’ll add a tiny exporter
+
